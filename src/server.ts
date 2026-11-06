@@ -1,5 +1,6 @@
 import express, { Response } from "express";
 import { data, load, save } from "./db";
+import { subscribe, sendOrder, sendStock } from "./sse";
 import { Order, Status } from "./types";
 
 const app = express();
@@ -29,6 +30,7 @@ const nextStatus: Record<Status, Status | null> = {
 async function setStatus(order: Order, status: Status): Promise<void> {
   order.status = status;
   await save();
+  sendOrder(status === "cancelled" ? "order-cancelled" : "order-status", order);
   if (status === "shipped") {
     setTimeout(() => deliver(order.id), 20000);
   }
@@ -40,6 +42,18 @@ function deliver(id: number): void {
     setStatus(order, "delivered");
   }
 }
+
+// flux SSE de toute la boutique
+app.get("/events", (req, res) => {
+  subscribe(req, res, null);
+});
+
+// flux SSE d une seule commande, filtre par le serveur
+app.get("/orders/:id/events", (req, res) => {
+  const order = findOrder(req.params.id);
+  if (!order) return error(res, 404, "Commande introuvable");
+  subscribe(req, res, order.id);
+});
 
 app.get("/users", (req, res) => {
   res.json(data.users);
@@ -84,6 +98,8 @@ app.post("/orders", async (req, res) => {
   };
   data.orders.push(order);
   await save();
+  sendOrder("order-created", order);
+  sendStock(product);
   res.status(201).json(order);
 });
 
@@ -102,7 +118,10 @@ app.patch("/orders/:id/status", async (req, res) => {
       return error(res, 409, "Seule une commande en preparation peut etre annulee");
     }
     const product = data.products.find((p) => p.id === order.productId);
-    if (product) product.stock += order.quantity;
+    if (product) {
+      product.stock += order.quantity;
+      sendStock(product);
+    }
   } else if (nextStatus[order.status] !== status) {
     return error(res, 409, `Passage de ${order.status} a ${status} interdit`);
   }
