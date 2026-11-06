@@ -17,12 +17,17 @@ export function subscribe(req: Request, res: Response, orderId: number | null): 
     "Cache-Control": "no-cache",
     Connection: "keep-alive",
   });
-  res.write("\n");
+  // B3 : le navigateur attend 5 s avant de se reconnecter
+  res.write("retry: 5000\n\n");
 
   const client: Client = { res, orderId };
   clients.add(client);
 
+  // B4 : un commentaire toutes les 20 s garde la connexion active
+  const ping = setInterval(() => res.write(": ping\n\n"), 20000);
+
   req.on("close", () => {
+    clearInterval(ping);
     clients.delete(client);
   });
 }
