@@ -2,7 +2,7 @@
 
 Suivi de commandes d'une boutique en ligne avec Express 5, TypeScript et Server-Sent Events codés à la main.
 
-Dépôt Git : https://github.com/TODO/suivi-commandes
+Dépôt Git : https://github.com/RETR0EDIT/Web-Temps-R-el-tp1
 
 ## Lancement
 
