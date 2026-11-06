@@ -19,6 +19,10 @@
     const id = new URLSearchParams(location.search).get("id");
     document.getElementById("id").textContent = id;
 
+    function isFinished(order) {
+      return order.status === "delivered" || order.status === "cancelled";
+    }
+
     function show(order) {
       document.getElementById("status").textContent = labels[order.status];
     }
@@ -29,12 +33,19 @@
         document.getElementById("status").textContent = "Commande introuvable";
         return;
       }
-      show(await res.json());
+      const order = await res.json();
+      show(order);
+      if (isFinished(order)) return;
 
       // le serveur n envoie que les evenements de cette commande
       const events = new EventSource(`/orders/${id}/events`);
       for (const name of ["order-status", "order-cancelled"]) {
-        events.addEventListener(name, (e) => show(JSON.parse(e.data)));
+        events.addEventListener(name, (e) => {
+          const order = JSON.parse(e.data);
+          show(order);
+          // commande finie : plus de reconnexion
+          if (isFinished(order)) events.close();
+        });
       }
     }
 
