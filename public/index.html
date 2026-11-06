@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Boutique</title>
+</head>
+<body>
+  <h1>Boutique</h1>
+
+  <h2>Produits</h2>
+  <ul id="products"></ul>
+
+  <h2>Nouvelle commande</h2>
+  <form id="form">
+    <select id="user"></select>
+    <select id="product"></select>
+    <input id="quantity" type="number" min="1" value="1">
+    <button>Commander</button>
+  </form>
+  <p id="message"></p>
+
+  <h2>Commandes</h2>
+  <ul id="orders"></ul>
+
+  <script>
+    async function refresh() {
+      const users = await (await fetch("/users")).json();
+      const products = await (await fetch("/products")).json();
+      const orders = await (await fetch("/orders")).json();
+
+      document.getElementById("products").innerHTML = products
+        .map((p) => `<li>${p.name} : ${p.stock} en stock</li>`).join("");
+
+      document.getElementById("user").innerHTML = users
+        .map((u) => `<option value="${u.id}">${u.name}</option>`).join("");
+
+      document.getElementById("product").innerHTML = products
+        .map((p) => `<option value="${p.id}">${p.name}</option>`).join("");
+
+      document.getElementById("orders").innerHTML = orders.map((o) => `
+        <li>
+          Commande ${o.id} : ${o.quantity} x produit ${o.productId} - ${o.status}
+          <button onclick="setStatus(${o.id}, 'shipped')">Expedier</button>
+          <button onclick="setStatus(${o.id}, 'cancelled')">Annuler</button>
+          <a href="/suivi.html?id=${o.id}">Suivre</a>
+        </li>`).join("");
+    }
+
+    async function setStatus(id, status) {
+      const res = await fetch(`/orders/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const body = await res.json();
+      document.getElementById("message").textContent = res.ok ? "" : body.error;
+    }
+
+    document.getElementById("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const res = await fetch("/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: Number(document.getElementById("user").value),
+          productId: Number(document.getElementById("product").value),
+          quantity: Number(document.getElementById("quantity").value),
+        }),
+      });
+      const body = await res.json();
+      document.getElementById("message").textContent = res.ok ? "Commande creee" : body.error;
+    });
+
+    // chaque evenement recu recharge l affichage
+    const events = new EventSource("/events");
+    for (const name of ["order-created", "order-status", "order-cancelled", "stock"]) {
+      events.addEventListener(name, refresh);
+    }
+
+    refresh();
+  </script>
+</body>
+</html>
